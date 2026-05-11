@@ -40,11 +40,17 @@ func (fish) CompletionFilename() string { return "completion.fish" }
 const fishTemplate = `# ~/.gouse/shell.fish — gerado por ` + "`gouse init`" + `. Não editar manualmente.
 fish_add_path -g $HOME/.gouse/bin
 
+# Nota: ` + "`| string collect`" + ` é essencial. Sem ele, a substituição de
+# comando quebra a saída em uma lista de linhas e ` + "`eval`" + ` junta os
+# argumentos com espaço, destruindo as quebras de linha do script renderizado.
+
 function gouse
   switch $argv[1]
     case use
-      set -l out (command gouse shell-env --shell fish $argv[2])
-      or return $status
+      set -l out (command gouse shell-env --shell fish $argv[2] | string collect)
+      if test $pipestatus[1] -ne 0
+        return $pipestatus[1]
+      end
       eval $out
     case '*'
       command gouse $argv
@@ -59,7 +65,10 @@ end
 # Ativa a versão default ao carregar (se houver):
 set -l _default (command gouse default --print 2>/dev/null)
 if test -n "$_default"
-  eval (command gouse shell-env --shell fish $_default 2>/dev/null)
+  set -l out (command gouse shell-env --shell fish $_default 2>/dev/null | string collect)
+  if test $pipestatus[1] -eq 0
+    eval $out
+  end
 end
 `
 
