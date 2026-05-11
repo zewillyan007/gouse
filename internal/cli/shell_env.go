@@ -8,13 +8,17 @@ import (
 )
 
 func newShellEnvCmd() *cobra.Command {
-	return &cobra.Command{
+	var shellFlag string
+	cmd := &cobra.Command{
 		Use:    "shell-env <versão|latest>",
 		Short:  "Imprime exports para aplicar uma versão no shell (uso interno)",
 		Hidden: true,
 		Args:   cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			res, err := app.ShellEnv(app.ShellEnvParams{Version: args[0]})
+			res, err := app.ShellEnv(app.ShellEnvParams{
+				Version:   args[0],
+				ShellName: shellFlag,
+			})
 			if err != nil {
 				return err
 			}
@@ -22,4 +26,6 @@ func newShellEnvCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&shellFlag, "shell", "bash", "sintaxe a emitir (bash|zsh|fish)")
+	return cmd
 }

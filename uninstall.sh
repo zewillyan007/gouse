@@ -6,7 +6,8 @@
 #
 # Remove:
 #   ~/.gouse/
-#   linha 'source ~/.gouse/shell.sh' do ~/.bashrc
+#   linha de source do gouse em todos os rcfiles conhecidos
+#       (~/.bashrc, ~/.zshrc, ~/.config/fish/config.fish)
 #   ~/go/gopaths/                              (todos os GOPATHs gerenciados)
 #   $XDG_DATA_HOME/gos ou ~/.local/share/gos/  (todas as versões do Go)
 #
@@ -16,11 +17,16 @@
 set -euo pipefail
 
 GOUSE_DIR="$HOME/.gouse"
-SHELL_SH="$GOUSE_DIR/shell.sh"
-BASHRC="$HOME/.bashrc"
 GOPATHS_DIR="$HOME/go/gopaths"
 GOS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/gos"
-SOURCE_LINE='source ~/.gouse/shell.sh'
+
+# rcfile path | source line. Mantém uma única fonte da verdade pra
+# extensão a shells novos no futuro.
+RCFILES=(
+  "$HOME/.bashrc|source ~/.gouse/shell.sh"
+  "$HOME/.zshrc|source ~/.gouse/shell.zsh"
+  "$HOME/.config/fish/config.fish|source ~/.gouse/shell.fish"
+)
 
 ASSUME_YES=0
 for arg in "$@"; do
@@ -44,7 +50,14 @@ confirm() {
   log ""
   log "O uninstall removerá:"
   [ -e "$GOUSE_DIR" ]    && log "  - $GOUSE_DIR"
-  grep -Fxq "$SOURCE_LINE" "$BASHRC" 2>/dev/null && log "  - linha '$SOURCE_LINE' do $BASHRC"
+  local entry rcfile line
+  for entry in "${RCFILES[@]}"; do
+    rcfile="${entry%%|*}"
+    line="${entry##*|}"
+    if [ -f "$rcfile" ] && grep -Fxq "$line" "$rcfile"; then
+      log "  - linha '$line' do $rcfile"
+    fi
+  done
   [ -e "$GOPATHS_DIR" ]  && log "  - $GOPATHS_DIR (todos os projetos lá dentro)"
   [ -e "$GOS_DIR" ]      && log "  - $GOS_DIR (todas as versões do Go)"
   log ""
@@ -63,26 +76,31 @@ remove_gouse_dir() {
   fi
 }
 
-remove_bashrc_line() {
-  if [ ! -f "$BASHRC" ]; then
-    return 0
-  fi
-  if ! grep -Fxq "$SOURCE_LINE" "$BASHRC"; then
+remove_rcfile_line() {
+  local rcfile="$1" line="$2"
+  if [ ! -f "$rcfile" ] || ! grep -Fxq "$line" "$rcfile"; then
     return 0
   fi
   local tmp
   tmp=$(mktemp)
-  # Remove a linha do source e o comentário "# gouse — ..." imediatamente anterior se presente.
-  awk -v src="$SOURCE_LINE" '
-    BEGIN { skip_next_blank = 0 }
+  awk -v src="$line" '
     {
       if ($0 == src) { next }
       if ($0 == "# gouse — gerenciador de versões do Go") { next }
       print
     }
-  ' "$BASHRC" > "$tmp"
-  mv "$tmp" "$BASHRC"
-  log "Linha removida de $BASHRC"
+  ' "$rcfile" > "$tmp"
+  mv "$tmp" "$rcfile"
+  log "Linha removida de $rcfile"
+}
+
+remove_all_rcfile_lines() {
+  local entry rcfile line
+  for entry in "${RCFILES[@]}"; do
+    rcfile="${entry%%|*}"
+    line="${entry##*|}"
+    remove_rcfile_line "$rcfile" "$line"
+  done
 }
 
 remove_gopaths() {
@@ -103,7 +121,7 @@ remove_gos() {
 main() {
   confirm
   remove_gouse_dir
-  remove_bashrc_line
+  remove_all_rcfile_lines
   remove_gopaths
   remove_gos
   log ""

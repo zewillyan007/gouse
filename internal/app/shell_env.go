@@ -8,7 +8,8 @@ import (
 )
 
 type ShellEnvParams struct {
-	Version string // "latest" resolves to the newest installed version
+	Version   string // "latest" resolves to the newest installed version
+	ShellName string // canonical shell name; empty = bash (POSIX exports)
 }
 
 type ShellEnvResult struct {
@@ -31,7 +32,15 @@ func ShellEnv(p ShellEnvParams) (ShellEnvResult, error) {
 	if !store.Exists(version) {
 		return ShellEnvResult{}, fmt.Errorf("versão %s não está instalada; rode `gouse install %s`", version, version)
 	}
-	script, err := shell.RenderEnv(version)
+	name := p.ShellName
+	if name == "" {
+		name = "bash"
+	}
+	sh, err := shell.Get(name)
+	if err != nil {
+		return ShellEnvResult{}, err
+	}
+	script, err := sh.RenderEnv(version)
 	if err != nil {
 		return ShellEnvResult{}, err
 	}

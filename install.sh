@@ -4,12 +4,12 @@
 # Uso público:
 #   curl -fsSL https://raw.githubusercontent.com/zewillyan007/gouse/main/install.sh | sh
 #
-# Modos:
-#   (sem flag)   baixa o binário do GitHub Releases
-#   --local      builda a partir do código-fonte no diretório atual (dev)
+# Flags:
+#   --local           builda a partir do código-fonte no diretório atual (dev)
+#   --shell <name>    força o shell-alvo (bash|zsh|fish). Default = autodetect via $SHELL.
 #
 # Garantias:
-#   - Sem sudo. Só cria/escreve em ~/.gouse/ e edita ~/.bashrc.
+#   - Sem sudo. Só cria/escreve em ~/.gouse/ e no rcfile do shell detectado.
 #   - Zero resíduo: nada de .bak, .tmp ou pastas temporárias fora de ~/.gouse/.
 
 set -euo pipefail
@@ -18,41 +18,85 @@ REPO="zewillyan007/gouse"
 GOUSE_DIR="$HOME/.gouse"
 GOUSE_BIN_DIR="$GOUSE_DIR/bin"
 GOUSE_BIN="$GOUSE_BIN_DIR/gouse"
-SHELL_SH="$GOUSE_DIR/shell.sh"
-BASHRC="$HOME/.bashrc"
-SOURCE_LINE='source ~/.gouse/shell.sh'
 
 MODE="release"
-for arg in "$@"; do
-  case "$arg" in
+SHELL_OVERRIDE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --local) MODE="local" ;;
-    *) echo "flag desconhecida: $arg" >&2; exit 2 ;;
+    --shell) SHELL_OVERRIDE="${2:-}"; shift ;;
+    --shell=*) SHELL_OVERRIDE="${1#--shell=}" ;;
+    *) echo "flag desconhecida: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
 log() { printf '%s\n' "$*"; }
 err() { printf '%s\n' "$*" >&2; }
 
-check_platform() {
-  local os arch
-  os=$(uname -s | tr '[:upper:]' '[:lower:]')
-  arch=$(uname -m)
-  case "$arch" in
-    x86_64|amd64) arch="amd64" ;;
-    *) err "Arquitetura $arch não suportada nesta versão do gouse."; exit 1 ;;
+# detect_arch echoes the canonical arch name (amd64 | arm64) used by the
+# release asset filenames; aborts on unsupported machines.
+detect_arch() {
+  local m
+  m=$(uname -m)
+  case "$m" in
+    x86_64|amd64)   echo amd64 ;;
+    aarch64|arm64)  echo arm64 ;;
+    *) err "Arquitetura $m não suportada (linux/amd64 e linux/arm64)."; exit 1 ;;
   esac
-  if [ "$os" != "linux" ] || [ "$arch" != "amd64" ]; then
-    err "OS/Arch $os/$arch não suportado nesta versão do gouse (somente linux/amd64)."
+}
+
+check_platform() {
+  local os
+  os=$(uname -s | tr '[:upper:]' '[:lower:]')
+  if [ "$os" != "linux" ]; then
+    err "OS $os não suportado nesta versão do gouse (somente linux)."
     exit 1
   fi
+}
+
+# detect_shell echoes the canonical shell name (bash | zsh | fish).
+# $GOUSE_SHELL env var or --shell flag overrides $SHELL detection.
+detect_shell() {
+  if [ -n "${SHELL_OVERRIDE:-}" ]; then echo "$SHELL_OVERRIDE"; return; fi
+  if [ -n "${GOUSE_SHELL:-}" ]; then echo "$GOUSE_SHELL"; return; fi
+  case "${SHELL:-}" in
+    */bash|bash) echo bash ;;
+    */zsh|zsh)   echo zsh ;;
+    */fish|fish) echo fish ;;
+    *)           echo bash ;;
+  esac
+}
+
+# rcfile_for echoes the absolute path of the rcfile for the given shell.
+rcfile_for() {
+  case "$1" in
+    bash) echo "$HOME/.bashrc" ;;
+    zsh)  echo "$HOME/.zshrc" ;;
+    fish) echo "$HOME/.config/fish/config.fish" ;;
+    *)    err "shell desconhecido: $1"; exit 1 ;;
+  esac
+}
+
+# source_line_for echoes the line to add to the rcfile for the given shell.
+source_line_for() {
+  case "$1" in
+    bash) echo 'source ~/.gouse/shell.sh' ;;
+    zsh)  echo 'source ~/.gouse/shell.zsh' ;;
+    fish) echo 'source ~/.gouse/shell.fish' ;;
+    *)    err "shell desconhecido: $1"; exit 1 ;;
+  esac
 }
 
 check_gouse_dir() {
   if [ ! -e "$GOUSE_DIR" ]; then
     return 0
   fi
-  if [ -d "$GOUSE_DIR" ] && [ -f "$GOUSE_DIR/shell.sh" ]; then
-    # install anterior do gouse — upgrade ok
+  # Treat as previous install if any known integration file is present.
+  if [ -d "$GOUSE_DIR" ] && {
+       [ -f "$GOUSE_DIR/shell.sh" ] || \
+       [ -f "$GOUSE_DIR/shell.zsh" ] || \
+       [ -f "$GOUSE_DIR/shell.fish" ]; }; then
     return 0
   fi
   err "$GOUSE_DIR já existe e não parece ser um install do gouse."
@@ -86,20 +130,23 @@ fetch() {
 }
 
 download_release() {
+  local arch
+  arch=$(detect_arch)
+  local asset="gouse-linux-$arch"
   local base="https://github.com/$REPO/releases/latest/download"
   local tmp_bin="$GOUSE_DIR/.tmp-gouse"
   local tmp_sums="$GOUSE_DIR/.tmp-sums"
   trap 'rm -f "$tmp_bin" "$tmp_sums"' EXIT
 
-  log "Baixando $base/gouse-linux-amd64..."
-  fetch "$base/gouse-linux-amd64" "$tmp_bin"
+  log "Baixando $base/$asset..."
+  fetch "$base/$asset" "$tmp_bin"
   fetch "$base/SHA256SUMS" "$tmp_sums"
 
   local expected got
-  expected=$(awk '/gouse-linux-amd64/ {print $1}' "$tmp_sums")
+  expected=$(awk -v a="$asset" '$2 == a {print $1}' "$tmp_sums")
   got=$(sha256sum "$tmp_bin" | awk '{print $1}')
   if [ -z "$expected" ]; then
-    err "SHA256SUMS não contém entrada para gouse-linux-amd64."
+    err "SHA256SUMS não contém entrada para $asset."
     exit 1
   fi
   if [ "$expected" != "$got" ]; then
@@ -114,19 +161,24 @@ download_release() {
 }
 
 run_init() {
-  "$GOUSE_BIN" init >/dev/null
+  local sh="$1"
+  "$GOUSE_BIN" init --shell "$sh" >/dev/null
 }
 
-update_bashrc() {
-  touch "$BASHRC"
-  if grep -Fxq "$SOURCE_LINE" "$BASHRC"; then
+update_rcfile() {
+  local sh="$1"
+  local rcfile source_line
+  rcfile=$(rcfile_for "$sh")
+  source_line=$(source_line_for "$sh")
+  mkdir -p "$(dirname "$rcfile")"
+  touch "$rcfile"
+  if grep -Fxq "$source_line" "$rcfile"; then
     return 0
   fi
-  printf '\n# gouse — gerenciador de versões do Go\n%s\n' "$SOURCE_LINE" >> "$BASHRC"
+  printf '\n# gouse — gerenciador de versões do Go\n%s\n' "$source_line" >> "$rcfile"
 }
 
 cleanup_residue() {
-  # Garante que nada além de ~/.gouse/ foi criado.
   rm -rf "$GOUSE_DIR/tmp" 2>/dev/null || true
 }
 
@@ -134,15 +186,23 @@ main() {
   check_platform
   check_gouse_dir
   ensure_dirs
+
+  local detected_shell
+  detected_shell=$(detect_shell)
+
   case "$MODE" in
     local)   build_local ;;
     release) download_release ;;
   esac
-  run_init
-  update_bashrc
+  run_init "$detected_shell"
+  update_rcfile "$detected_shell"
   cleanup_residue
+
+  local rcfile
+  rcfile=$(rcfile_for "$detected_shell")
   log ""
-  log "Pronto. Abra um novo terminal (ou rode 'source ~/.bashrc') e use:"
+  log "Pronto. Shell detectado: $detected_shell"
+  log "Abra um novo terminal (ou rode 'source $rcfile') e use:"
   log "  gouse install latest"
   log "  gouse use go1.x.y"
 }

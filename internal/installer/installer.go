@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zewillyan007/gouse/internal/platform"
 	"github.com/zewillyan007/gouse/internal/releases"
 	"github.com/zewillyan007/gouse/internal/store"
 )
@@ -31,7 +32,7 @@ const downloadBase = "https://go.dev/dl/"
 // download starts (for transparency).
 // progress, if non-nil, is called with (bytesRead, totalBytes) during the
 // download.
-func Install(ctx context.Context, file releases.File, onSourceURL func(url string), progress func(read, total int64)) error {
+func Install(ctx context.Context, file releases.File, plat platform.Platform, onSourceURL func(url string), progress func(read, total int64)) error {
 	if err := store.EnsureGosDir(); err != nil {
 		return err
 	}
@@ -77,12 +78,25 @@ func Install(ctx context.Context, file releases.File, onSourceURL func(url strin
 		return fmt.Errorf("SHA256 não confere: esperado %s, obtido %s", file.SHA256, got)
 	}
 
-	if err := extractTarGz(tmpPath, target); err != nil {
+	if err := extract(tmpPath, target, plat.ArchiveFormat); err != nil {
 		// best-effort cleanup on extraction failure
 		_ = os.RemoveAll(target)
 		return err
 	}
 	return nil
+}
+
+// extract dispatches by archive format. Only tar.gz is implemented today;
+// zip will be added when Windows support lands.
+func extract(archivePath, destDir, format string) error {
+	switch format {
+	case "tar.gz":
+		return extractTarGz(archivePath, destDir)
+	case "zip":
+		return fmt.Errorf("formato zip ainda não suportado (TODO: Windows)")
+	default:
+		return fmt.Errorf("formato de arquivo desconhecido: %s", format)
+	}
 }
 
 func download(ctx context.Context, url string, w io.Writer, expectedSize int64, progress func(read, total int64)) error {

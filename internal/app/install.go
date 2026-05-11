@@ -24,8 +24,8 @@ type InstallResult struct {
 }
 
 func Install(ctx context.Context, p InstallParams) (InstallResult, error) {
-	plat := platform.Detect()
-	if err := plat.Check(); err != nil {
+	plat, err := platform.Resolve(platform.Detect())
+	if err != nil {
 		return InstallResult{}, err
 	}
 	rs, err := releases.Fetch(ctx)
@@ -57,7 +57,7 @@ func Install(ctx context.Context, p InstallParams) (InstallResult, error) {
 		return InstallResult{}, err
 	}
 
-	if err := installer.Install(ctx, file, p.OnSourceURL, p.Progress); err != nil {
+	if err := installer.Install(ctx, file, plat, p.OnSourceURL, p.Progress); err != nil {
 		return InstallResult{}, err
 	}
 	if err := store.EnsureGopath(rel.Version); err != nil {

@@ -4,7 +4,8 @@ Gerenciador simples de versões do Go para Linux. Instala, remove e troca entre 
 
 Inspirado em `nvm`/`pyenv`: uma função shell intercepta `gouse use` e ajusta `PATH`/`GOPATH` no shell atual.
 
-> Plataforma suportada hoje: **linux/amd64**. Arquitetura preparada para outros OS/arch.
+> **Plataformas suportadas**: `linux/amd64`, `linux/arm64`.
+> **Shells suportados**: `bash`, `zsh`, `fish` (autodetectados via `$SHELL`).
 
 ## Instalação
 
@@ -14,9 +15,22 @@ curl -fsSL https://raw.githubusercontent.com/zewillyan007/gouse/main/install.sh 
 
 O instalador (sem sudo):
 
-1. Baixa o binário para `~/.gouse/bin/gouse`.
-2. Gera `~/.gouse/shell.sh` (função shell).
-3. Acrescenta `source ~/.gouse/shell.sh` ao `~/.bashrc` (idempotente).
+1. Detecta arquitetura (`uname -m`) e shell (`$SHELL`).
+2. Baixa o binário correto (`gouse-linux-amd64` ou `gouse-linux-arm64`) para `~/.gouse/bin/gouse`.
+3. Gera `~/.gouse/shell.{sh|zsh|fish}` conforme o shell detectado.
+4. Acrescenta a linha `source ...` ao rcfile correspondente (idempotente):
+
+| Shell | rcfile | linha adicionada |
+|---|---|---|
+| bash | `~/.bashrc` | `source ~/.gouse/shell.sh` |
+| zsh | `~/.zshrc` | `source ~/.gouse/shell.zsh` |
+| fish | `~/.config/fish/config.fish` | `source ~/.gouse/shell.fish` |
+
+Para forçar um shell específico (útil se você usa bash mas está rodando o instalador em zsh, por ex.):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zewillyan007/gouse/main/install.sh | sh -s -- --shell zsh
+```
 
 Tudo do gouse fica em `~/.gouse/`. As versões do Go ficam em `~/.local/share/gos/` (XDG). Em nenhum momento o gouse pede sudo.
 
@@ -50,7 +64,7 @@ gouse --version                   # mostra a versão do gouse
 
 ### Tab-complete
 
-O instalador deixa o tab-complete pronto no bash: digite `gouse <TAB><TAB>` para listar os subcomandos. Em `gouse use <TAB>`, `gouse remove <TAB>` e `gouse default <TAB>`, o bash sugere as versões já instaladas. Para que funcione, basta `source ~/.bashrc` ou um terminal novo após o install.
+O instalador deixa o tab-complete pronto em **bash, zsh e fish** com paridade total. Digite `gouse <TAB><TAB>` para listar os subcomandos. Em `gouse use <TAB>`, `gouse remove <TAB>` e `gouse default <TAB>`, o shell sugere as versões já instaladas. A mesma lista aparece nos três shells. Para ativar, basta abrir um terminal novo (ou re-sourcear o rcfile) após o install.
 
 ### Paginação do `list-remote`
 
@@ -87,7 +101,7 @@ curl -fsSL https://raw.githubusercontent.com/zewillyan007/gouse/main/uninstall.s
 Remove (sem sudo):
 
 - `~/.gouse/`
-- A linha `source ~/.gouse/shell.sh` do `~/.bashrc`
+- A linha de source do gouse em **todos** os rcfiles conhecidos (`~/.bashrc`, `~/.zshrc`, `~/.config/fish/config.fish`)
 - `~/go/gopaths/` (todos os GOPATHs)
 - `~/.local/share/gos/` (todas as versões do Go)
 
@@ -110,8 +124,8 @@ Sem a função shell carregada, `gouse use <versão>` imprime os exports no stdo
 ```
 ~/.gouse/
 ├── bin/gouse              binário Go
-├── shell.sh               função gouse() + tab-complete + ativação do default no startup
-├── completion.bash        script de tab-complete (gerado pelo `gouse init`)
+├── shell.{sh|zsh|fish}    função gouse() + tab-complete + ativação do default no startup
+├── completion.{bash|zsh|fish}    script de tab-complete (gerado pelo `gouse init`)
 └── state.json             { "default": "...", "latest_known": "...", "latest_checked_at": ... }
 
 ~/.local/share/gos/<versão>/go/    extração do tarball oficial

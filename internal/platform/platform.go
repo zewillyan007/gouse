@@ -1,7 +1,6 @@
 // Package platform identifies the current OS/arch and selects the matching
-// release file from the go.dev/dl payload. New OS/arch combinations only need
-// to be added to Supported (and to installer.Extract if their archive format
-// differs from tar.gz).
+// release file from the go.dev/dl payload. Adding a new platform is a
+// one-line append to the `supported` slice.
 package platform
 
 import (
@@ -9,28 +8,53 @@ import (
 	"runtime"
 )
 
+// Platform represents a target combination of OS, architecture, and the
+// archive format used by Go's download page.
 type Platform struct {
-	OS   string
-	Arch string
+	OS            string
+	Arch          string
+	ArchiveFormat string // "tar.gz" | "zip"
 }
 
 func (p Platform) String() string {
 	return p.OS + "/" + p.Arch
 }
 
-var Supported = map[string]bool{
-	"linux/amd64": true,
+// supported is the canonical list of platforms gouse can install Go onto.
+// Add new entries here; installer.Extract must understand the ArchiveFormat.
+var supported = []Platform{
+	{OS: "linux", Arch: "amd64", ArchiveFormat: "tar.gz"},
+	{OS: "linux", Arch: "arm64", ArchiveFormat: "tar.gz"},
 }
 
+// Supported returns a copy of the supported platforms list.
+func Supported() []Platform {
+	out := make([]Platform, len(supported))
+	copy(out, supported)
+	return out
+}
+
+// Detect returns the platform of the running process. Use Resolve to map it
+// to the canonical entry (with ArchiveFormat) or get an error.
 func Detect() Platform {
 	return Platform{OS: runtime.GOOS, Arch: runtime.GOARCH}
 }
 
-func (p Platform) Check() error {
-	if !Supported[p.String()] {
-		return fmt.Errorf("plataforma %s não suportada nesta versão do gouse", p)
+// Resolve looks up the supported entry matching p.OS/p.Arch and returns
+// it (which carries the ArchiveFormat). Returns an error if not supported.
+func Resolve(p Platform) (Platform, error) {
+	for _, s := range supported {
+		if s.OS == p.OS && s.Arch == p.Arch {
+			return s, nil
+		}
 	}
-	return nil
+	return Platform{}, fmt.Errorf("plataforma %s não suportada nesta versão do gouse", p)
+}
+
+// Check is a shortcut for Resolve that discards the canonical entry.
+func (p Platform) Check() error {
+	_, err := Resolve(p)
+	return err
 }
 
 type File interface {
@@ -39,6 +63,8 @@ type File interface {
 	GetKind() string
 }
 
+// SelectFile picks the archive file matching the platform from a list of
+// release files (e.g. releases.File).
 func SelectFile[F File](files []F, p Platform) (F, error) {
 	var zero F
 	for _, f := range files {
