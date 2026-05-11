@@ -18,6 +18,13 @@ REPO="zewillyan007/gouse"
 GOUSE_DIR="$HOME/.gouse"
 GOUSE_BIN_DIR="$GOUSE_DIR/bin"
 GOUSE_BIN="$GOUSE_BIN_DIR/gouse"
+TMP_BIN="$GOUSE_DIR/.tmp-gouse"
+TMP_SUMS="$GOUSE_DIR/.tmp-sums"
+
+# Script-level cleanup: ensures the temp files are removed on any exit
+# path (success, failure, Ctrl-C). Declared at script scope so the trap
+# can reference the variables when EXIT fires after functions return.
+trap 'rm -f "$TMP_BIN" "$TMP_SUMS"' EXIT
 
 MODE="release"
 SHELL_OVERRIDE=""
@@ -130,21 +137,18 @@ fetch() {
 }
 
 download_release() {
-  local arch
+  local arch asset base
   arch=$(detect_arch)
-  local asset="gouse-linux-$arch"
-  local base="https://github.com/$REPO/releases/latest/download"
-  local tmp_bin="$GOUSE_DIR/.tmp-gouse"
-  local tmp_sums="$GOUSE_DIR/.tmp-sums"
-  trap 'rm -f "$tmp_bin" "$tmp_sums"' EXIT
+  asset="gouse-linux-$arch"
+  base="https://github.com/$REPO/releases/latest/download"
 
   log "Baixando $base/$asset..."
-  fetch "$base/$asset" "$tmp_bin"
-  fetch "$base/SHA256SUMS" "$tmp_sums"
+  fetch "$base/$asset" "$TMP_BIN"
+  fetch "$base/SHA256SUMS" "$TMP_SUMS"
 
   local expected got
-  expected=$(awk -v a="$asset" '$2 == a {print $1}' "$tmp_sums")
-  got=$(sha256sum "$tmp_bin" | awk '{print $1}')
+  expected=$(awk -v a="$asset" '$2 == a {print $1}' "$TMP_SUMS")
+  got=$(sha256sum "$TMP_BIN" | awk '{print $1}')
   if [ -z "$expected" ]; then
     err "SHA256SUMS não contém entrada para $asset."
     exit 1
@@ -156,7 +160,7 @@ download_release() {
     exit 1
   fi
 
-  mv "$tmp_bin" "$GOUSE_BIN"
+  mv "$TMP_BIN" "$GOUSE_BIN"
   chmod +x "$GOUSE_BIN"
 }
 
