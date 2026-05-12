@@ -7,6 +7,7 @@
 # Flags:
 #   --local           builda a partir do código-fonte no diretório atual (dev)
 #   --shell <name>    força o shell-alvo (bash|zsh|fish). Default = autodetect via $SHELL.
+#   --version <tag>   instala uma versão específica (ex: v0.2.3). Default = latest.
 #
 # Garantias:
 #   - Sem sudo. Só cria/escreve em ~/.gouse/ e no rcfile do shell detectado.
@@ -28,11 +29,14 @@ trap 'rm -f "$TMP_BIN" "$TMP_SUMS"' EXIT
 
 MODE="release"
 SHELL_OVERRIDE=""
+VERSION_OVERRIDE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --local) MODE="local" ;;
     --shell) SHELL_OVERRIDE="${2:-}"; shift ;;
     --shell=*) SHELL_OVERRIDE="${1#--shell=}" ;;
+    --version) VERSION_OVERRIDE="${2:-}"; shift ;;
+    --version=*) VERSION_OVERRIDE="${1#--version=}" ;;
     *) echo "flag desconhecida: $1" >&2; exit 2 ;;
   esac
   shift
@@ -162,7 +166,11 @@ fetch_latest_tag() {
 download_release() {
   local arch tag asset base
   arch=$(detect_arch)
-  tag=$(fetch_latest_tag)
+  if [ -n "${VERSION_OVERRIDE:-}" ]; then
+    tag="$VERSION_OVERRIDE"
+  else
+    tag=$(fetch_latest_tag)
+  fi
   asset="gouse-${tag}-linux-${arch}"
   base="https://github.com/$REPO/releases/download/${tag}"
 

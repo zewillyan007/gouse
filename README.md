@@ -32,6 +32,14 @@ Para forçar um shell específico (útil se você usa bash mas está rodando o i
 curl -fsSL https://raw.githubusercontent.com/zewillyan007/gouse/main/install.sh | sh -s -- --shell zsh
 ```
 
+Para instalar uma versão específica em vez da `latest`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zewillyan007/gouse/main/install.sh | sh -s -- --version v0.2.3
+```
+
+As flags podem ser combinadas (`--version v0.2.3 --shell fish`).
+
 Tudo do gouse fica em `~/.gouse/`. As versões do Go ficam em `~/.local/share/gos/` (XDG). Em nenhum momento o gouse pede sudo.
 
 Após o install, abra um novo terminal (ou `source ~/.bashrc`).
