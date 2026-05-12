@@ -38,11 +38,22 @@ Após o install, abra um novo terminal (ou `source ~/.bashrc`).
 
 ### Verificação de integridade
 
-Cada release publica um arquivo `SHA256SUMS` junto do binário. O `install.sh` baixa os dois, compara o hash do `gouse-linux-amd64` contra o valor em `SHA256SUMS` e aborta se não bater. Caso prefira fazer manualmente:
+Cada release publica um arquivo `SHA256SUMS` junto dos binários, que são nomeados no formato `gouse-<versão>-<os>-<arch>` (ex: `gouse-v0.2.3-linux-amd64`). O `install.sh` descobre a versão mais recente via header de redirect, baixa o asset correto e compara o hash contra `SHA256SUMS` antes de instalar.
+
+Caso prefira fazer manualmente:
 
 ```sh
-curl -fsSL https://github.com/zewillyan007/gouse/releases/latest/download/gouse-linux-amd64 -o gouse
-curl -fsSL https://github.com/zewillyan007/gouse/releases/latest/download/SHA256SUMS -o SHA256SUMS
+# Descobre a tag mais recente
+tag=$(curl -fsSI https://github.com/zewillyan007/gouse/releases/latest \
+        | awk 'tolower($1)=="location:"{print $2}' \
+        | tr -d '\r' | tail -1)
+tag="${tag##*/}"
+
+# Baixa o binário e o SHA256SUMS
+curl -fsSL "https://github.com/zewillyan007/gouse/releases/download/${tag}/gouse-${tag}-linux-amd64" -o gouse
+curl -fsSL "https://github.com/zewillyan007/gouse/releases/download/${tag}/SHA256SUMS" -o SHA256SUMS
+
+# Verifica
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 

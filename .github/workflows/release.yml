@@ -27,12 +27,12 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} \
             go build -trimpath \
               -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
-              -o dist/gouse-linux-${{ matrix.goarch }} ./cmd/gouse
+              -o "dist/gouse-${GITHUB_REF_NAME}-linux-${{ matrix.goarch }}" ./cmd/gouse
 
       - uses: actions/upload-artifact@v4
         with:
-          name: gouse-linux-${{ matrix.goarch }}
-          path: dist/gouse-linux-${{ matrix.goarch }}
+          name: gouse-${{ github.ref_name }}-linux-${{ matrix.goarch }}
+          path: dist/gouse-${{ github.ref_name }}-linux-${{ matrix.goarch }}
 
   release:
     needs: build
@@ -45,12 +45,12 @@ jobs:
 
       - name: Checksums
         working-directory: dist
-        run: sha256sum gouse-linux-* > SHA256SUMS
+        run: sha256sum gouse-*-linux-* > SHA256SUMS
 
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/gouse-linux-amd64
-            dist/gouse-linux-arm64
+            dist/gouse-*-linux-amd64
+            dist/gouse-*-linux-arm64
             dist/SHA256SUMS
           generate_release_notes: true

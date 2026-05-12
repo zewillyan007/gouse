@@ -136,11 +136,35 @@ fetch() {
   fi
 }
 
+# fetch_latest_tag echoes the latest release tag by following the
+# /releases/latest redirect — no JSON parsing, no API rate limit.
+fetch_latest_tag() {
+  local loc
+  if command -v curl >/dev/null 2>&1; then
+    loc=$(curl -fsSI "https://github.com/$REPO/releases/latest" 2>/dev/null \
+      | awk 'tolower($1) == "location:" {print $2}' \
+      | tr -d '\r' | tail -1)
+  elif command -v wget >/dev/null 2>&1; then
+    loc=$(wget --max-redirect=0 -S -O /dev/null "https://github.com/$REPO/releases/latest" 2>&1 \
+      | awk 'tolower($1) == "location:" {print $2}' \
+      | tr -d '\r' | tail -1)
+  else
+    err "É necessário 'curl' ou 'wget' para descobrir a versão."
+    exit 1
+  fi
+  if [ -z "$loc" ]; then
+    err "Não consegui descobrir a versão mais recente do gouse."
+    exit 1
+  fi
+  printf '%s' "${loc##*/}"
+}
+
 download_release() {
-  local arch asset base
+  local arch tag asset base
   arch=$(detect_arch)
-  asset="gouse-linux-$arch"
-  base="https://github.com/$REPO/releases/latest/download"
+  tag=$(fetch_latest_tag)
+  asset="gouse-${tag}-linux-${arch}"
+  base="https://github.com/$REPO/releases/download/${tag}"
 
   log "Baixando $base/$asset..."
   fetch "$base/$asset" "$TMP_BIN"
